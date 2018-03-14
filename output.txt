@@ -1,0 +1,43 @@
+
+ Fetching Repositories ........
+1. https://github.com/snowdrop/spring-boot-http-booster
+2. https://github.com/snowdrop/spring-boot-http-secured-booster
+3. https://github.com/snowdrop/spring-boot-configmap-booster
+4. https://github.com/snowdrop/spring-boot-bom
+5. https://github.com/snowdrop/spring-boot-health-check-booster
+6. https://github.com/snowdrop/spring-boot-crud-booster
+7. https://github.com/snowdrop/openshift-templates
+8. https://github.com/snowdrop/spring-boot-circuit-breaker-booster
+9. https://github.com/snowdrop/spring-boot-blank-template
+10. https://github.com/snowdrop/jaeger-opentracing
+11. https://github.com/snowdrop/site
+12. https://github.com/snowdrop/legacy_content
+13. https://github.com/snowdrop/tracing-example
+14. https://github.com/snowdrop/licenses-generator
+15. https://github.com/snowdrop/spring-cloud-stream-binder-artemis
+16. https://github.com/snowdrop/spring-data-snowdrop
+17. https://github.com/snowdrop/spring-boot-booster-parent
+18. https://github.com/snowdrop/spring-boot-mvc-jsp
+19. https://github.com/snowdrop/spring-boot-http-2
+20. https://github.com/snowdrop/spring-boot-tomcat-logging-booster
+21. https://github.com/snowdrop/boosters-utils
+22. https://github.com/snowdrop/spring-boot-jolokia
+23. https://github.com/snowdrop/istio-integration
+24. https://github.com/snowdrop/spring-boot-quickstart-istio
+25. https://github.com/snowdrop/spring-boot-spring-data-booster
+26. https://github.com/snowdrop/istio-model
+27. https://github.com/snowdrop/fmp-istio-enricher
+28. https://github.com/snowdrop/istio-java-api
+29. https://github.com/snowdrop/booster-archetype
+30. https://github.com/snowdrop/spring-boot-cache-booster
+
+ Repo to be forked: spring-boot-health-check-booster
+ Forked Repo: <nil>
+ Calculating SHA's ............. 
+
+ SHA_LATEST_COMMIT: 879f6b1901ee73d4ebe71c4221fa3cfce562f05b
+ SHA_BASE_TREE: 879f6b1901ee73d4ebe71c4221fa3cfce562f05b
+ SHA_NEW_TREE: ed817e398c53f8b5c9f0526d83253066d17ebb83
+ Editing POM .................1a8af5b86276a3931a1d318331c335c8656bd8b1
+
+ Opening a new PR ................. https://github.com/hemanik/test1/pull/1
