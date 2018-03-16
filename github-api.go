@@ -3,142 +3,124 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"os/exec"
 
 	"github.com/google/go-github/github"
-	"golang.org/x/oauth2"
 )
 
 const (
-	// ORGANIZATION base repository owner
-	ORGANIZATION = "snowdrop"
-	// FORK_OWNER owner for the foked repo
-	FORK_OWNER = "hemanik"
+	tempDirectory = "/tmp/temp/"
 )
 
-func fetchOrganisationRepositories(client *github.Client) []*github.Repository {
-	repos, _, err := client.Repositories.ListByOrg(context.Background(), ORGANIZATION, nil)
+// FetchOrganizationRepositories fetches repos by organization
+func FetchOrganizationRepositories(ctx context.Context, client *github.Client, organization string) []*github.Repository {
+	fmt.Print("\n Fetching Repositories ........\n")
+	repos, _, err := client.Repositories.ListByOrg(ctx, organization, nil)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 	}
 
 	for i, repo := range repos {
-		fmt.Printf("\n %v. %s\n", i+1, *repo.HTMLURL)
+		fmt.Printf(" %v. %s\n", i+1, repo.GetHTMLURL())
 	}
-
 	return repos
 }
 
-func forkRepository(client *github.Client, repo string) {
-	forkedRepo, _, forkErr := client.Repositories.CreateFork(context.Background(), ORGANIZATION, repo, nil)
+// ForkRepository forks a repo
+func ForkRepository(ctx context.Context, client *github.Client, organization string, repo string) {
+	fmt.Printf("\n Repo to be forked: %v \n\n", repo)
+
+	forkedRepo, _, forkErr := client.Repositories.CreateFork(ctx, organization, repo, nil)
 
 	if _, ok := forkErr.(*github.AcceptedError); ok {
-		log.Println("\n scheduled on GitHub side")
+		log.Println("scheduled on GitHub side")
 	}
 
-	fmt.Printf("\n Forked Repo: %v", forkedRepo)
+	fmt.Printf("\n Repository Fork Created %v", forkedRepo.GetHTMLURL())
 }
 
-func fetchBaseTree(client *github.Client, repo string) string {
-	// Get reference to HEAD
-	ref, _, err := client.Git.GetRef(context.Background(), FORK_OWNER, repo, "refs/heads/master")
+// GetRepositoryContents fetches repository contents
+func GetRepositoryContents(ctx context.Context, client *github.Client, forkOwner string, repo string, path string) (string, string) {
+	fmt.Println("\n\n Caching Repository Contents...........")
+
+	contents, _, _, err := client.Repositories.GetContents(ctx, forkOwner, repo, path, nil)
 	if err != nil {
-		fmt.Printf("Git.GetRef returned error: %v", err)
+		fmt.Printf("Repositories.GetContents returned error: %v", err)
 	}
-	latestCommitSHA := ref.Object.GetSHA()
-	fmt.Printf("\n SHA_LATEST_COMMIT: %v", latestCommitSHA)
-
-	// Grab the commit HEAD point to.
-	commit, _, err := client.Git.GetCommit(context.Background(), ORGANIZATION, repo, latestCommitSHA)
-	if err != nil {
-		fmt.Printf("Git.GetCommit returned error: %v", err)
-	}
-	baseTreeSHA := commit.GetSHA()
-	fmt.Printf("\n SHA_BASE_TREE: %v", baseTreeSHA)
-
-	// Get hold of the tree commit points to.
-	treeInput := []github.TreeEntry{
-		{
-			Path:    github.String("tests/pom.xml"),
-			Mode:    github.String("100644"),
-			Type:    github.String("blob"),
-			Content: github.String("file content"),
-		},
-	}
-
-	tree, _, err := client.Git.CreateTree(context.Background(), FORK_OWNER, repo, baseTreeSHA, treeInput)
-	if err != nil {
-		fmt.Printf("Git.CreateTree returned error: %v", err)
-	}
-	newTreeSHA := tree.GetSHA()
-	fmt.Printf("\n SHA_NEW_TREE: %v", newTreeSHA)
-
-	return baseTreeSHA
+	fileContent, _ := contents.GetContent()
+	fileSha := contents.GetSHA()
+	storeRepositoryContentsInTempDirectory(fileContent, path)
+	return fileContent, fileSha
 }
 
-func editAndCommitRepositoryContent(client *github.Client, repo string, baseTreeSHA string) {
-	message := "version bump"
-	content := []byte("file content")
+// BumpProjectVersion bumps new version
+func BumpProjectVersion(dependency string) {
+	if err := exec.Command("sh", "version-bump.sh", dependency).Run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println("\n Successfully bumped new version.")
+}
+
+// EditAndCommitRepositoryContent updates repo content
+func EditAndCommitRepositoryContent(ctx context.Context, client *github.Client, forkOwner string, repo string, path string, baseTreeSHA string, dependency string) {
+	fmt.Print("\n Editing POM .................\n")
+
+	BumpProjectVersion(dependency)
+
+	message := "chore: bumps new project version."
+	content := []byte(getNewRepositoryContentsFromTempDirectory(path))
 	sha := baseTreeSHA
 	repositoryContentsOptions := &github.RepositoryContentFileOptions{
-		Message:   &message,
-		Content:   content,
-		SHA:       &sha,
-		Committer: &github.CommitAuthor{Name: github.String("arquillian"), Email: github.String("arquillian-ike@redhat.com")},
+		Message: &message,
+		Content: content,
+		SHA:     &sha,
+		//Committer: &github.CommitAuthor{Name: github.String("arquillian"), Email: github.String("arquillian-ike@redhat.com")},
 	}
-	updateResponse, _, err := client.Repositories.UpdateFile(context.Background(), FORK_OWNER, repo, "tests/pom.xml", repositoryContentsOptions)
+	updateResponse, _, err := client.Repositories.UpdateFile(ctx, forkOwner, repo, path, repositoryContentsOptions)
 	if err != nil {
 		fmt.Printf("Repositories.UpdateFile returned error: %v", err)
 	}
 
-	responseSHA := updateResponse.GetSHA()
-	fmt.Printf("%s\n", responseSHA)
+	fmt.Printf("\n Added commit %s\n", updateResponse.GetMessage())
 }
 
-func openPullRequest(client *github.Client, repo string) {
-	prInput := &github.NewPullRequest{
-		Title: github.String("Bumps new version"),
-		Body:  github.String("Bumps Latest Version"),
-		Head:  github.String("hemanik:development"),
+// OpenPullRequest opens a PR
+func OpenPullRequest(ctx context.Context, client *github.Client, organization string, forkOwner string, repo string) {
+	fmt.Print("\n Opening a new PR ................. ")
+
+	input := &github.NewPullRequest{
+		Title: github.String("Bumps New Project Version"),
+		Body:  github.String("Bumps latest version"),
+		Head:  github.String(forkOwner + ":master"),
 		Base:  github.String("master"),
 	}
 
-	pull, _, err := client.PullRequests.Create(context.Background(), ORGANIZATION, "test1", prInput)
+	pull, _, err := client.PullRequests.Create(ctx, organization, repo, input)
 	if err != nil {
 		fmt.Printf("PullRequests.Create returned error: %v", err)
 	}
 	fmt.Printf("%s\n", pull.GetHTMLURL())
 }
 
-func main() {
+func storeRepositoryContentsInTempDirectory(fileContent string, path string) {
+	if _, err := os.Stat(tempDirectory); os.IsNotExist(err) {
+		os.Mkdir(tempDirectory, 0777)
+	}
 
-	// Authentication
-	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: "47b3edcff1ef72fbe48cf892417bc4bc65cbae6e"},
-	)
-	tc := oauth2.NewClient(ctx, ts)
+	if err := ioutil.WriteFile(tempDirectory+path, []byte(fileContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+}
 
-	client := github.NewClient(tc)
-
-	// 1. Fetch All Repositories of the Organisation
-	fmt.Print("\n Fetching Repositories ........")
-	repos := fetchOrganisationRepositories(client)
-
-	// 2. Fork all the Repositories
-	repo := *repos[4].Name
-	fmt.Printf("\n Repo to be forked: %v", repo)
-	forkRepository(client, repo)
-
-	// 3. Get Base Tree For Computation
-	fmt.Println("\n Calculating SHA's ............. ")
-	baseTreeSHA := fetchBaseTree(client, repo)
-
-	// 4. Edit pom.xml, commit and push for Version Bump
-	fmt.Print("\n Editing POM .................")
-	editAndCommitRepositoryContent(client, repo, baseTreeSHA)
-
-	// 5. Open a PR to the repo.
-	fmt.Print("\n Opening a new PR ................. ")
-	openPullRequest(client, repo)
+func getNewRepositoryContentsFromTempDirectory(path string) string {
+	content, err := ioutil.ReadFile(tempDirectory + path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	os.RemoveAll(tempDirectory) // clean up
+	return string(content)
 }
